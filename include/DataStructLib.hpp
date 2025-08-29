@@ -417,4 +417,9 @@ public:
         postOrder(root, result);
         return result;
     }
+
+    int numberOfNodes(){
+        return inOrder().size();
+    }
+
 };
