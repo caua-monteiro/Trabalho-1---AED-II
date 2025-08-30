@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 #include <cmath>
+#include <algorithm>
 #include "include/DataStructLib.hpp"
 
 enum class Traversal { Pre, In, Post };
@@ -18,7 +19,12 @@ static std::string joinInts(const std::vector<int>& v) {
     return oss.str();
 }
 
+static inline sf::String U8(const std::string& s) {
+    return sf::String::fromUtf8(s.begin(), s.end());
+}
+
 int main() {
+
     sf::ContextSettings settings;
     settings.antialiasingLevel = 8;
 
@@ -197,9 +203,9 @@ int main() {
             const unsigned uiSize = static_cast<unsigned>(std::max(14.f, window.getSize().y * 0.022f));
 
             std::string modeStr = "Modo: ";
-            if (mode == Mode::View)   modeStr += "Visualizacao [V]";
-            if (mode == Mode::Insert) modeStr += "Insercao [I]";
-            if (mode == Mode::Delete) modeStr += "Delecao [D]";
+            if (mode == Mode::View)   modeStr += "Visualização [V]";
+            if (mode == Mode::Insert) modeStr += "Inserção [I]";
+            if (mode == Mode::Delete) modeStr += "Deleção [D]";
 
             const auto travVec = traversalVector();
             std::string travStr = currentTraversalText() + joinInts(travVec);
@@ -208,8 +214,17 @@ int main() {
                 travStr += "   |  Valor: " + inputBuffer + "  (Enter confirma)";
             }
 
-            sf::Text t1(modeStr, font, uiSize);
-            sf::Text t2(travStr, font, uiSize);
+            sf::Text t1; 
+            t1.setFont(font);
+            t1.setCharacterSize(uiSize);
+            t1.setFillColor(sf::Color::White);
+            t1.setString(U8(modeStr));
+
+            sf::Text t2;
+            t2.setFont(font);
+            t2.setCharacterSize(uiSize);
+            t2.setFillColor(sf::Color(220,220,220));
+            t2.setString(U8(travStr));
 
             t1.setFillColor(sf::Color::White);
             t2.setFillColor(sf::Color(220, 220, 220));
