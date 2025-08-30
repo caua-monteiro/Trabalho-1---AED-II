@@ -1,5 +1,8 @@
+#pragma once
 #include <iostream>
 #include <vector>
+#include <cstddef>
+
 // ========================
 // Classe Node (Nó da Lista)
 // ========================
@@ -329,97 +332,171 @@ std::ostream& operator<<(std::ostream& os, const LinkedList<T>& list) {
 
 template <typename T>
 class BST {
-private:
+public:
+    // Nó exposto para visualização (sem dependências gráficas)
     struct Node {
         T key;
         Node* left;
         Node* right;
-        explicit Node(const T& k) : key(k), left(nullptr), right(nullptr) {}
+        Node* parent;
+        explicit Node(const T& k, Node* p = nullptr)
+            : key(k), left(nullptr), right(nullptr), parent(p) {}
     };
 
-    Node* root;
+    // Entrada de layout "neutro": posição normalizada 0..1
+    struct LayoutEntry {
+        const Node* node;
+        double x;
+        double y;
+        int depth;
+    };
 
-    static void destroy(Node* n) {
+private:
+    Node* root_;
+    std::size_t sz_;
+
+public:
+    BST() : root_(nullptr), sz_(0) {}
+    ~BST() { clear(); }
+
+    BST(const BST&) = delete;
+    BST& operator=(const BST&) = delete;
+
+    Node* root() { return root_; }
+    const Node* root() const { return root_; }
+
+    std::size_t size() const { return sz_; }
+    bool empty() const { return sz_ == 0; }
+    void clear() { clearRec(root_); root_ = nullptr; sz_ = 0; }
+
+    // Operações básicas
+    bool contains(const T& k) const { return findNode(k) != nullptr; }
+
+    void insert(const T& k) {
+        if (!root_) { root_ = new Node(k); ++sz_; return; }
+        Node* cur = root_;
+        Node* parent = nullptr;
+        while (cur) {
+            parent = cur;
+            if (k < cur->key) cur = cur->left;
+            else if (cur->key < k) cur = cur->right;
+            else return;
+        }
+        Node* n = new Node(k, parent);
+        if (k < parent->key) parent->left = n; else parent->right = n;
+        ++sz_;
+    }
+
+    bool remove(const T& k) {
+        Node* n = findNode(k);
+        if (!n) return false;
+        eraseNode(n);
+        --sz_;
+        return true;
+    }
+
+    std::vector<T> preOrder() const { std::vector<T> out; out.reserve(sz_); preOrderRec(root_, out); return out; }
+    std::vector<T> inOrder()  const { std::vector<T> out; out.reserve(sz_); inOrderRec(root_, out);  return out; }
+    std::vector<T> postOrder()const { std::vector<T> out; out.reserve(sz_); postOrderRec(root_, out);return out; }
+
+    std::vector<LayoutEntry> layoutNormalized() const {
+        std::vector<LayoutEntry> out;
+        const int n = static_cast<int>(sz_);
+        if (n == 0) return out;
+
+        int idx = 0;
+        int maxDepth = 0;
+        layoutInorder(root_, 0, idx, n, out, maxDepth);
+
+        // Normaliza y pela profundidade máxima
+        const double denom = (maxDepth == 0) ? 1.0 : static_cast<double>(maxDepth);
+        for (auto& e : out) {
+            e.y = (maxDepth == 0) ? 0.0 : (static_cast<double>(e.depth) / denom);
+        }
+        return out;
+    }
+
+    void insert_Node(const T& k) { insert(k); }
+    bool delete_Node(const T& k) { return remove(k); }
+    int numberOfNodes() const { return static_cast<int>(size()); }
+
+private:
+    // Utilidades internas
+    void clearRec(Node* n) {
         if (!n) return;
-        destroy(n->left);
-        destroy(n->right);
+        clearRec(n->left);
+        clearRec(n->right);
         delete n;
     }
 
-    // auxiliares recursivos
-    static void preOrder(Node* n, std::vector<T>& out) {
-        if (!n) return;
-        out.push_back(n->key);
-        preOrder(n->left, out);
-        preOrder(n->right, out);
-    }
-
-    static void inOrder(Node* n, std::vector<T>& out) {
-        if (!n) return;
-        inOrder(n->left, out);
-        out.push_back(n->key);
-        inOrder(n->right, out);
-    }
-
-    static void postOrder(Node* n, std::vector<T>& out) {
-        if (!n) return;
-        postOrder(n->left, out);
-        postOrder(n->right, out);
-        out.push_back(n->key);
-    }
-
-public:
-    BST() : root(nullptr) {}
-    ~BST() { destroy(root); }
-
-    void insert_Node(const T& value) {
-        Node** cur = &root;
-        while (*cur != nullptr) {
-            if (value == (*cur)->key) {
-                return; // duplicado, ignora
-            }
-            if (value < (*cur)->key) {
-                cur = &(*cur)->left;
-            } else {
-                cur = &(*cur)->right;
-            }
+    Node* findNode(const T& k) const {
+        Node* cur = root_;
+        while (cur) {
+            if (k < cur->key) cur = cur->left;
+            else if (cur->key < k) cur = cur->right;
+            else return cur;
         }
-        *cur = new Node(value);
+        return nullptr;
     }
 
-    bool contains_Node(const T& value) const {
-        Node* cur = root;
-        while (cur != nullptr) {
-            if (value == cur->key) return true;
-            if (value < cur->key) cur = cur->left;
-            else cur = cur->right;
+    static Node* minimum(Node* n) {
+        while (n && n->left) n = n->left;
+        return n;
+    }
+
+    void transplant(Node* u, Node* v) {
+        if (!u->parent) root_ = v;
+        else if (u == u->parent->left) u->parent->left = v;
+        else u->parent->right = v;
+        if (v) v->parent = u->parent;
+    }
+
+    void eraseNode(Node* z) {
+        if (!z->left) transplant(z, z->right);
+        else if (!z->right) transplant(z, z->left);
+        else {
+            Node* y = minimum(z->right);
+            if (y->parent != z) {
+                transplant(y, y->right);
+                y->right = z->right;
+                if (y->right) y->right->parent = y;
+            }
+            transplant(z, y);
+            y->left = z->left;
+            if (y->left) y->left->parent = y;
         }
-        return false;
+        delete z;
     }
 
-    // Retorna vetor em pré-ordem
-    std::vector<T> preOrder() const {
-        std::vector<T> result;
-        preOrder(root, result);
-        return result;
+    void preOrderRec(Node* n, std::vector<T>& out) const {
+        if (!n) return;
+        out.push_back(n->key);
+        preOrderRec(n->left, out);
+        preOrderRec(n->right, out);
+    }
+    void inOrderRec(Node* n, std::vector<T>& out) const {
+        if (!n) return;
+        inOrderRec(n->left, out);
+        out.push_back(n->key);
+        inOrderRec(n->right, out);
+    }
+    void postOrderRec(Node* n, std::vector<T>& out) const {
+        if (!n) return;
+        postOrderRec(n->left, out);
+        postOrderRec(n->right, out);
+        out.push_back(n->key);
     }
 
-    // Retorna vetor em ordem
-    std::vector<T> inOrder() const {
-        std::vector<T> result;
-        inOrder(root, result);
-        return result;
-    }
+    void layoutInorder(Node* n, int depth, int& idx, int nTotal,
+                       std::vector<LayoutEntry>& out, int& maxDepth) const {
+        if (!n) return;
+        if (depth > maxDepth) maxDepth = depth;
+        layoutInorder(n->left, depth + 1, idx, nTotal, out, maxDepth);
 
-    // Retorna vetor em pós-ordem
-    std::vector<T> postOrder() const {
-        std::vector<T> result;
-        postOrder(root, result);
-        return result;
-    }
+        const double x = (static_cast<double>(idx) + 1.0) / (static_cast<double>(nTotal) + 1.0);
+        out.push_back(LayoutEntry{ n, x, 0.0, depth });
+        ++idx;
 
-    int numberOfNodes(){
-        return inOrder().size();
+        layoutInorder(n->right, depth + 1, idx, nTotal, out, maxDepth);
     }
-
 };
